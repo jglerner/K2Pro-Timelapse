@@ -84,12 +84,12 @@ Start your print, then run the script passing your printer's IP address:
 
 #### Windows
 ```powershell
-python k2pro_timelapse.py 192.168.1.100
+python k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
 #### macOS / Linux
 ```bash
-python3 k2pro_timelapse.py 192.168.1.100
+python3 k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
 If you don't pass an IP it defaults to `192.168.10.87`.
