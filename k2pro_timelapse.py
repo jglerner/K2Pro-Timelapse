@@ -1,17 +1,28 @@
+import argparse
 import asyncio
 import os
 import subprocess
 import time
 from playwright.async_api import async_playwright
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-CAMERA_URL       = "http://192.168.10.87:8000"   # WebRTC camera page on the K2 Pro
-OUTPUT_DIR       = "snapshots"                   # folder for captured PNG frames
-OUTPUT_FILE      = "k2pro-timelapse.mp4"         # final timelapse video
-SNAPSHOT_INTERVAL = 6                            # seconds between frames
-FPS              = 24                            # output video frame rate
-MIN_SIZE         = 50_000                        # discard frames smaller than 50 KB
+# ── Defaults ──────────────────────────────────────────────────────────────────
+DEFAULT_IP        = "192.168.10.87"
+OUTPUT_DIR        = "snapshots"
+OUTPUT_FILE       = "k2pro-timelapse.mp4"
+SNAPSHOT_INTERVAL = 6     # seconds between frames
+FPS               = 24    # output video frame rate
+MIN_SIZE          = 50_000 # discard frames smaller than 50 KB
 # ──────────────────────────────────────────────────────────────────────────────
+
+parser = argparse.ArgumentParser(description="K2 Pro timelapse capture")
+parser.add_argument(
+    "ip",
+    nargs="?",
+    default=DEFAULT_IP,
+    help=f"IP address of the K2 Pro (default: {DEFAULT_IP})",
+)
+args = parser.parse_args()
+CAMERA_URL = f"http://{args.ip}:8000"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

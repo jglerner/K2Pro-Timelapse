@@ -8,7 +8,7 @@ Automatic timelapse capture for the **Creality K2 Pro** 3D printer using its bui
 
 ## Prerequisites
 
-### 1 — Enable the camera in Fluidd (one-time setup)
+### 1 — Enable the camera (one-time setup on the printer)
 
 The K2 Pro camera is not accessible by default. You first need to apply the workaround by **[DnG-Crafts/K2-Camera](https://github.com/DnG-Crafts/K2-Camera)**, which patches the printer firmware to expose the WebRTC stream.
 
@@ -25,26 +25,53 @@ sh ~/K2-Camera-main/install.sh
 
 Once installed, the camera stream is available at:
 ```
-http://<printer-ip>:8000
+http://<your-printer-ip>:8000
 ```
 
-### 2 — System dependencies
+### 2 — Install ffmpeg
 
-- Python 3.10+
-- `ffmpeg` installed and on your PATH
-- A Linux/macOS machine on the same local network as the printer
+#### Windows
+```powershell
+winget install ffmpeg
+```
+Or download from https://ffmpeg.org/download.html and add to your PATH.
+
+#### macOS
+```bash
+brew install ffmpeg
+```
+
+#### Linux
+```bash
+sudo apt install ffmpeg      # Debian/Ubuntu
+sudo dnf install ffmpeg      # Fedora
+```
+
+### 3 — Python 3.10 or newer
+
+- **Windows / macOS**: download from https://www.python.org/downloads/
+- **Linux**: usually pre-installed (`python3 --version`)
 
 ---
 
 ## Installation
 
+#### Windows
+```powershell
+git clone https://github.com/jglerner/K2Pro-Timelapse.git
+cd K2Pro-Timelapse
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+```
+
+#### macOS / Linux
 ```bash
 git clone https://github.com/jglerner/K2Pro-Timelapse.git
 cd K2Pro-Timelapse
-
 python3 -m venv venv
 source venv/bin/activate
-
 pip install -r requirements.txt
 playwright install chromium
 ```
@@ -53,29 +80,30 @@ playwright install chromium
 
 ## Usage
 
-1. Edit the `CAMERA_URL` at the top of `k2pro_timelapse.py` to match your printer's IP:
+Start your print, then run the script passing your printer's IP address:
 
-```python
-CAMERA_URL = "http://192.168.10.87:8000"
+#### Windows
+```powershell
+python k2pro_timelapse.py 192.168.1.100
 ```
 
-2. Start your print, then run:
-
+#### macOS / Linux
 ```bash
-python3 k2pro_timelapse.py
+python3 k2pro_timelapse.py 192.168.1.100
 ```
 
-3. When the print finishes, press **Ctrl+C**.
-   The script will automatically run `ffmpeg` and produce `k2pro-timelapse.mp4`.
+If you don't pass an IP it defaults to `192.168.10.87`.
+
+When the print finishes, press **Ctrl+C** — the script will automatically run `ffmpeg` and produce `k2pro-timelapse.mp4` in the current folder.
 
 ---
 
 ## How it works
 
 - A headless Chromium browser opens the camera page at port 8000
-- A full 1920×1080 screenshot is taken every **6 seconds**
+- A full **1920×1080** screenshot is taken every **6 seconds**
 - Frames smaller than 50 KB (blank startup frames) are discarded automatically
-- On exit, `ffmpeg` encodes all frames into an H.264 MP4 at **24 fps**
+- On exit, `ffmpeg` encodes all frames into an **H.264 MP4 at 24 fps**
 
 ### Timelapse timing
 
@@ -90,14 +118,16 @@ python3 k2pro_timelapse.py
 
 ## Configuration
 
-| Variable            | Default                        | Description                        |
-|---------------------|--------------------------------|------------------------------------|
-| `CAMERA_URL`        | `http://192.168.10.87:8000`    | WebRTC camera page URL             |
-| `SNAPSHOT_INTERVAL` | `6`                            | Seconds between frames             |
-| `FPS`               | `24`                           | Output video frame rate            |
-| `MIN_SIZE`          | `50_000`                       | Minimum frame size in bytes        |
-| `OUTPUT_DIR`        | `snapshots`                    | Folder for PNG frames              |
-| `OUTPUT_FILE`       | `k2pro-timelapse.mp4`          | Output video filename              |
+All settings are at the top of `k2pro_timelapse.py`:
+
+| Variable             | Default               | Description                      |
+|----------------------|-----------------------|----------------------------------|
+| `DEFAULT_IP`         | `192.168.10.87`       | Fallback printer IP              |
+| `SNAPSHOT_INTERVAL`  | `6`                   | Seconds between frames           |
+| `FPS`                | `24`                  | Output video frame rate          |
+| `MIN_SIZE`           | `50_000`              | Minimum frame size in bytes      |
+| `OUTPUT_DIR`         | `snapshots`           | Folder for PNG frames            |
+| `OUTPUT_FILE`        | `k2pro-timelapse.mp4` | Output video filename            |
 
 ---
 
