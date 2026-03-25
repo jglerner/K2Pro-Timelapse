@@ -131,6 +131,12 @@ If you don't pass an IP it defaults to `192.168.10.87`.
 
 ---
 
+## Demo
+
+[![K2 Pro Timelapse Demo](https://img.youtube.com/vi/hBXcu0E1xgQ/0.jpg)](https://youtu.be/hBXcu0E1xgQ)
+
+---
+
 ## How it works
 
 - A headless Chromium browser opens the camera page at port 8000
