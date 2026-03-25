@@ -53,19 +53,19 @@ async def wait_for_print_state(target_states: list[str]):
                 if msg.type != aiohttp.WSMsgType.TEXT:
                     continue
                 data = json.loads(msg.data)
-                # check subscription updates
-                status = (
-                    data.get("params", {})
-                        .get("status", {})
-                        .get("print_stats", {})
-                )
-                # also check the initial response
-                if "result" in data:
+                # update notifications: params is [{"print_stats": ...}, timestamp]
+                params = data.get("params", [])
+                if isinstance(params, list) and params:
+                    status = params[0].get("print_stats", {})
+                elif "result" in data:
+                    # initial subscription response: result.status.print_stats
                     status = (
                         data["result"]
                             .get("status", {})
                             .get("print_stats", {})
                     )
+                else:
+                    status = {}
                 state = status.get("state")
                 if state in target_states:
                     return state
