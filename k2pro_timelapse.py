@@ -52,35 +52,41 @@ OUTPUT_FILE = f"k2pro-timelapse-{timestamp}.mp4"
 
 async def wait_for_print_state(target_states: list[str]):
     """Connect to Moonraker and block until print_stats.state is in target_states."""
-    async with aiohttp.ClientSession() as session:
-        async with session.ws_connect(MOONRAKER_WS) as ws:
-            # subscribe to print_stats
-            await ws.send_str(json.dumps({
-                "jsonrpc": "2.0",
-                "method": "printer.objects.subscribe",
-                "params": {"objects": {"print_stats": ["state"]}},
-                "id": 1,
-            }))
-            async for msg in ws:
-                if msg.type != aiohttp.WSMsgType.TEXT:
-                    continue
-                data = json.loads(msg.data)
-                # update notifications: params is [{"print_stats": ...}, timestamp]
-                params = data.get("params", [])
-                if isinstance(params, list) and params:
-                    status = params[0].get("print_stats", {})
-                elif "result" in data:
-                    # initial subscription response: result.status.print_stats
-                    status = (
-                        data["result"]
-                            .get("status", {})
-                            .get("print_stats", {})
-                    )
-                else:
-                    status = {}
-                state = status.get("state")
-                if state in target_states:
-                    return state
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(MOONRAKER_WS) as ws:
+                    await ws.send_str(json.dumps({
+                        "jsonrpc": "2.0",
+                        "method": "printer.objects.subscribe",
+                        "params": {"objects": {"print_stats": ["state"]}},
+                        "id": 1,
+                    }))
+                    async for msg in ws:
+                        if msg.type != aiohttp.WSMsgType.TEXT:
+                            continue
+                        data = json.loads(msg.data)
+                        # update notifications: params is [{"print_stats": ...}, timestamp]
+                        params = data.get("params", [])
+                        if isinstance(params, list) and params:
+                            status = params[0].get("print_stats", {})
+                        elif "result" in data:
+                            # initial subscription response
+                            status = (
+                                data["result"]
+                                    .get("status", {})
+                                    .get("print_stats", {})
+                            )
+                        else:
+                            status = {}
+                        state = status.get("state")
+                        if state:
+                            print(f"Moonraker state: {state}")
+                        if state in target_states:
+                            return state
+        except Exception as e:
+            print(f"Moonraker connection error: {e} — retrying in 5s...")
+            await asyncio.sleep(5)
 
 
 # ── Capture loop ───────────────────────────────────────────────────────────────
