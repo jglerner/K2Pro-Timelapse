@@ -1,5 +1,7 @@
 import argparse
 import asyncio
+import datetime
+import glob
 import json
 import os
 import subprocess
@@ -10,7 +12,6 @@ from playwright.async_api import async_playwright
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_IP        = "192.168.10.87"
 OUTPUT_DIR        = "snapshots"
-OUTPUT_FILE       = "k2pro-timelapse.mp4"
 SNAPSHOT_INTERVAL = 6      # seconds between frames
 FPS               = 24     # output video frame rate
 MIN_SIZE          = 50_000  # discard frames smaller than 50 KB
@@ -34,6 +35,17 @@ CAMERA_URL    = f"http://{args.ip}:8000"
 MOONRAKER_WS  = f"ws://{args.ip}:7125/websocket"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# clean up any leftover frames from a previous run
+old_frames = glob.glob(os.path.join(OUTPUT_DIR, "frame_*.png"))
+if old_frames:
+    for f in old_frames:
+        os.remove(f)
+    print(f"Cleaned up {len(old_frames)} old frame(s).")
+
+# timestamped output filename so old timelapses are never overwritten
+timestamp  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+OUTPUT_FILE = f"k2pro-timelapse-{timestamp}.mp4"
 
 
 # ── Moonraker WebSocket ────────────────────────────────────────────────────────
