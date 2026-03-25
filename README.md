@@ -80,21 +80,30 @@ playwright install chromium
 
 ## Usage
 
+> **Every time you open a new terminal**, activate the virtual environment first:
+>
+> **Windows:** `venv\Scripts\activate`
+> **macOS / Linux:** `source venv/bin/activate`
+
+---
+
 ### Manual mode
 
 Start your print, then run the script passing your printer's IP address:
 
 #### Windows
 ```powershell
+venv\Scripts\activate
 python k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
 #### macOS / Linux
 ```bash
+source venv/bin/activate
 python3 k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
-Press **Ctrl+C** when the print finishes — the script will automatically run `ffmpeg` and produce `k2pro-timelapse.mp4`.
+Press **Ctrl+C** when the print finishes — the script will automatically run `ffmpeg` and produce the timelapse MP4.
 
 ---
 
@@ -104,15 +113,17 @@ Add `--auto` and the script will connect to Moonraker, wait for the print to sta
 
 #### Windows
 ```powershell
+venv\Scripts\activate
 python k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
 ```
 
 #### macOS / Linux
 ```bash
+source venv/bin/activate
 python3 k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
 ```
 
-No Ctrl+C needed — the timelapse builds itself when the print is done.
+No Ctrl+C needed — the timelapse builds itself when the print is done. Old frames are cleaned up automatically and each timelapse is saved with a timestamp so nothing gets overwritten.
 
 ---
 
@@ -149,7 +160,7 @@ All settings are at the top of `k2pro_timelapse.py`:
 | `FPS`                | `24`                  | Output video frame rate          |
 | `MIN_SIZE`           | `50_000`              | Minimum frame size in bytes      |
 | `OUTPUT_DIR`         | `snapshots`           | Folder for PNG frames            |
-| `OUTPUT_FILE`        | `k2pro-timelapse.mp4` | Output video filename            |
+| `OUTPUT_FILE`        | `k2pro-timelapse-YYYYMMDD_HHMMSS.mp4` | Output video filename (auto-timestamped) |
 
 ---
 
