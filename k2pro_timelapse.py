@@ -1,17 +1,19 @@
 import argparse
 import asyncio
+import json
 import os
 import subprocess
 import time
+import aiohttp
 from playwright.async_api import async_playwright
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_IP        = "192.168.10.87"
 OUTPUT_DIR        = "snapshots"
 OUTPUT_FILE       = "k2pro-timelapse.mp4"
-SNAPSHOT_INTERVAL = 6     # seconds between frames
-FPS               = 24    # output video frame rate
-MIN_SIZE          = 50_000 # discard frames smaller than 50 KB
+SNAPSHOT_INTERVAL = 6      # seconds between frames
+FPS               = 24     # output video frame rate
+MIN_SIZE          = 50_000  # discard frames smaller than 50 KB
 # ──────────────────────────────────────────────────────────────────────────────
 
 parser = argparse.ArgumentParser(description="K2 Pro timelapse capture")
@@ -21,15 +23,91 @@ parser.add_argument(
     default=DEFAULT_IP,
     help=f"IP address of the K2 Pro (default: {DEFAULT_IP})",
 )
+parser.add_argument(
+    "--auto",
+    action="store_true",
+    help="Wait for print to start/stop automatically via Moonraker",
+)
 args = parser.parse_args()
-CAMERA_URL = f"http://{args.ip}:8000"
+
+CAMERA_URL    = f"http://{args.ip}:8000"
+MOONRAKER_WS  = f"ws://{args.ip}:7125/websocket"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-async def main():
-    frame_index = 0
+# ── Moonraker WebSocket ────────────────────────────────────────────────────────
 
+async def wait_for_print_state(target_states: list[str]):
+    """Connect to Moonraker and block until print_stats.state is in target_states."""
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(MOONRAKER_WS) as ws:
+            # subscribe to print_stats
+            await ws.send_str(json.dumps({
+                "jsonrpc": "2.0",
+                "method": "printer.objects.subscribe",
+                "params": {"objects": {"print_stats": ["state"]}},
+                "id": 1,
+            }))
+            async for msg in ws:
+                if msg.type != aiohttp.WSMsgType.TEXT:
+                    continue
+                data = json.loads(msg.data)
+                # check subscription updates
+                status = (
+                    data.get("params", {})
+                        .get("status", {})
+                        .get("print_stats", {})
+                )
+                # also check the initial response
+                if "result" in data:
+                    status = (
+                        data["result"]
+                            .get("status", {})
+                            .get("print_stats", {})
+                    )
+                state = status.get("state")
+                if state in target_states:
+                    return state
+
+
+# ── Capture loop ───────────────────────────────────────────────────────────────
+
+async def capture_loop(page, stop_event: asyncio.Event):
+    """Take screenshots every SNAPSHOT_INTERVAL seconds until stop_event is set."""
+    frame_index = 0
+    video = await page.query_selector("video")
+
+    print("Capture started — one frame every 6 s.")
+    while not stop_event.is_set():
+        t0 = time.monotonic()
+
+        path = os.path.join(OUTPUT_DIR, f"frame_{frame_index:06d}.png")
+        await video.screenshot(path=path)
+        size = os.path.getsize(path)
+
+        if size < MIN_SIZE:
+            os.remove(path)
+            print(f"Discarded small frame ({size // 1024} KB)")
+        else:
+            print(f"Saved {path}  ({size // 1024} KB)")
+            frame_index += 1
+
+        elapsed = time.monotonic() - t0
+        try:
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=max(0, SNAPSHOT_INTERVAL - elapsed),
+            )
+        except asyncio.TimeoutError:
+            pass
+
+    return frame_index
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
@@ -44,7 +122,6 @@ async def main():
         print(f"Opening {CAMERA_URL} ...")
         await page.goto(CAMERA_URL)
 
-        # wait for the <video> element to start playing
         print("Waiting for video to start playing...")
         await page.wait_for_selector("video")
         await page.evaluate("""() => new Promise((resolve) => {
@@ -52,35 +129,39 @@ async def main():
             if (v && v.currentTime > 0) { resolve(); return; }
             v.addEventListener('timeupdate', () => resolve(), { once: true });
         })""")
-        print("Video playing — capturing every 6 s.  Press Ctrl+C to stop and build timelapse.")
+
+        stop_event = asyncio.Event()
+        frame_count = 0
 
         try:
-            while True:
-                t0 = time.monotonic()
+            if args.auto:
+                # ── Automatic mode ─────────────────────────────────────────
+                print(f"Auto mode — connecting to Moonraker at {MOONRAKER_WS}")
+                print("Waiting for print to start...")
+                await wait_for_print_state(["printing"])
+                print("Print started — capturing.")
 
-                path = os.path.join(OUTPUT_DIR, f"frame_{frame_index:06d}.png")
-                await page.screenshot(path=path, full_page=False)
-                size = os.path.getsize(path)
+                capture_task = asyncio.create_task(capture_loop(page, stop_event))
 
-                if size < MIN_SIZE:
-                    os.remove(path)
-                    print(f"Discarded small frame ({size // 1024} KB)")
-                else:
-                    print(f"Saved {path}  ({size // 1024} KB)")
-                    frame_index += 1
+                await wait_for_print_state(["complete", "error", "standby"])
+                print("Print finished — stopping capture.")
+                stop_event.set()
+                frame_count = await capture_task
 
-                elapsed = time.monotonic() - t0
-                await asyncio.sleep(max(0, SNAPSHOT_INTERVAL - elapsed))
+            else:
+                # ── Manual mode ────────────────────────────────────────────
+                print("Manual mode — press Ctrl+C to stop and build timelapse.")
+                frame_count = await capture_loop(page, stop_event)
 
         except (KeyboardInterrupt, asyncio.CancelledError):
-            pass
+            stop_event.set()
         finally:
             try:
                 await browser.close()
             except Exception:
                 pass
 
-    build_timelapse(frame_index)
+    build_timelapse(frame_count)
 
 
 def build_timelapse(frame_count):

@@ -80,6 +80,8 @@ playwright install chromium
 
 ## Usage
 
+### Manual mode
+
 Start your print, then run the script passing your printer's IP address:
 
 #### Windows
@@ -92,9 +94,29 @@ python k2pro_timelapse.py <YOUR-PRINTER-IP>
 python3 k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
-If you don't pass an IP it defaults to `192.168.10.87`.
+Press **Ctrl+C** when the print finishes — the script will automatically run `ffmpeg` and produce `k2pro-timelapse.mp4`.
 
-When the print finishes, press **Ctrl+C** — the script will automatically run `ffmpeg` and produce `k2pro-timelapse.mp4` in the current folder.
+---
+
+### Automatic mode (recommended)
+
+Add `--auto` and the script will connect to Moonraker, wait for the print to start, capture automatically, and stop by itself when the print ends:
+
+#### Windows
+```powershell
+python k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
+```
+
+#### macOS / Linux
+```bash
+python3 k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
+```
+
+No Ctrl+C needed — the timelapse builds itself when the print is done.
+
+---
+
+If you don't pass an IP it defaults to `192.168.10.87`.
 
 ---
 
