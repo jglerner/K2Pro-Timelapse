@@ -154,6 +154,20 @@ Connects to Moonraker, waits for the print to start, captures automatically, sto
 
 ---
 
+## Where are the MP4 files?
+
+Each timelapse is saved in the **same folder where you cloned the project**, named with the date and time it was built:
+
+```
+k2pro-timelapse-20260329_143512.mp4
+k2pro-timelapse-20260330_091047.mp4
+...
+```
+
+They are never overwritten — every print gets its own file.
+
+---
+
 ## Demo
 
 [![K2 Pro Timelapse Demo](https://img.youtube.com/vi/hBXcu0E1xgQ/0.jpg)](https://youtu.be/hBXcu0E1xgQ)
