@@ -27,7 +27,7 @@ parser.add_argument(
 parser.add_argument(
     "--auto",
     action="store_true",
-    help="Wait for print to start/stop automatically via Moonraker",
+    help="Wait for print to start/stop automatically via Moonraker; loops indefinitely for the next print after each one finishes.",
 )
 args = parser.parse_args()
 
@@ -35,17 +35,6 @@ CAMERA_URL    = f"http://{args.ip}:8000"
 MOONRAKER_WS  = f"ws://{args.ip}:7125/websocket"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# clean up any leftover frames from a previous run
-old_frames = glob.glob(os.path.join(OUTPUT_DIR, "frame_*.png"))
-if old_frames:
-    for f in old_frames:
-        os.remove(f)
-    print(f"Cleaned up {len(old_frames)} old frame(s).")
-
-# timestamped output filename so old timelapses are never overwritten
-timestamp  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-OUTPUT_FILE = f"k2pro-timelapse-{timestamp}.mp4"
 
 
 # ── Moonraker WebSocket ────────────────────────────────────────────────────────
@@ -123,6 +112,23 @@ async def capture_loop(page, stop_event: asyncio.Event):
     return frame_index
 
 
+# ── Camera page ────────────────────────────────────────────────────────────────
+
+async def open_camera_page(context):
+    """Open a fresh page pointed at the camera stream and wait for video."""
+    page = await context.new_page()
+    print(f"Opening {CAMERA_URL} ...")
+    await page.goto(CAMERA_URL)
+    print("Waiting for video to start playing...")
+    await page.wait_for_selector("video")
+    await page.evaluate("""() => new Promise((resolve) => {
+        const v = document.querySelector('video');
+        if (v && v.currentTime > 0) { resolve(); return; }
+        v.addEventListener('timeupdate', () => resolve(), { once: true });
+    })""")
+    return page
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -135,57 +141,63 @@ async def main():
             viewport={"width": 1920, "height": 1080},
             permissions=["camera", "microphone"],
         )
-        page = await context.new_page()
-
-        print(f"Opening {CAMERA_URL} ...")
-        await page.goto(CAMERA_URL)
-
-        print("Waiting for video to start playing...")
-        await page.wait_for_selector("video")
-        await page.evaluate("""() => new Promise((resolve) => {
-            const v = document.querySelector('video');
-            if (v && v.currentTime > 0) { resolve(); return; }
-            v.addEventListener('timeupdate', () => resolve(), { once: true });
-        })""")
-
-        stop_event = asyncio.Event()
-        frame_count = 0
 
         try:
             if args.auto:
-                # ── Automatic mode ─────────────────────────────────────────
+                # ── Automatic mode: one timelapse per print, loops forever ─
                 print(f"Auto mode — connecting to Moonraker at {MOONRAKER_WS}")
-                print("Waiting for print to start...")
-                await wait_for_print_state(["printing"])
-                print("Print started — capturing.")
+                print("Monitoring printer. Press Ctrl+C to quit.\n")
+                while True:
+                    # clean leftover frames from the previous run
+                    for f in glob.glob(os.path.join(OUTPUT_DIR, "frame_*.png")):
+                        os.remove(f)
 
-                capture_task = asyncio.create_task(capture_loop(page, stop_event))
+                    print("Waiting for print to start...")
+                    await wait_for_print_state(["printing"])
+                    print("Print started — capturing.")
 
-                await wait_for_print_state(["complete", "error", "standby"])
-                print("Print finished — stopping capture.")
-                stop_event.set()
-                frame_count = await capture_task
+                    page = await open_camera_page(context)
+                    stop_event = asyncio.Event()
+                    capture_task = asyncio.create_task(capture_loop(page, stop_event))
+
+                    await wait_for_print_state(["complete", "error", "standby"])
+                    print("Print finished — stopping capture.")
+                    stop_event.set()
+                    frame_count = await capture_task
+                    await page.close()
+
+                    build_timelapse(frame_count)
+                    print("Ready for next print.\n")
 
             else:
                 # ── Manual mode ────────────────────────────────────────────
+                old_frames = glob.glob(os.path.join(OUTPUT_DIR, "frame_*.png"))
+                if old_frames:
+                    for f in old_frames:
+                        os.remove(f)
+                    print(f"Cleaned up {len(old_frames)} old frame(s).")
+
+                page = await open_camera_page(context)
+                stop_event = asyncio.Event()
                 print("Manual mode — press Ctrl+C to stop and build timelapse.")
                 frame_count = await capture_loop(page, stop_event)
+                build_timelapse(frame_count)
 
         except (KeyboardInterrupt, asyncio.CancelledError):
-            stop_event.set()
+            print("\nStopped.")
         finally:
             try:
                 await browser.close()
             except Exception:
                 pass
 
-    build_timelapse(frame_count)
-
 
 def build_timelapse(frame_count):
     if frame_count == 0:
         print("No frames captured.")
         return
+    timestamp  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"k2pro-timelapse-{timestamp}.mp4"
     print(f"\nBuilding timelapse from {frame_count} frames at {FPS} fps...")
     subprocess.run([
         "ffmpeg", "-y",
@@ -193,9 +205,9 @@ def build_timelapse(frame_count):
         "-i", os.path.join(OUTPUT_DIR, "frame_%06d.png"),
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
-        OUTPUT_FILE,
+        output_file,
     ], check=True)
-    print(f"\nTimelapse saved to {OUTPUT_FILE}")
+    print(f"\nTimelapse saved to {output_file}")
     duration = frame_count / FPS
     print(f"Duration: {duration:.1f} s  ({frame_count} frames @ {FPS} fps)")
 

@@ -80,16 +80,58 @@ playwright install chromium
 
 ## Usage
 
-> **Every time you open a new terminal**, activate the virtual environment first:
->
-> **Windows:** `venv\Scripts\activate`
-> **macOS / Linux:** `source venv/bin/activate`
+### Set it and forget it (recommended)
+
+Run the launcher once after installation. It monitors the printer continuously: when a print starts it captures, when it ends it builds the timelapse, then it immediately waits for the next print. No Ctrl+C, no re-activating the venv, no thinking about it.
+
+#### Linux / macOS
+```bash
+./k2pro-timelapse.sh
+```
+
+#### Windows
+```bat
+k2pro-timelapse.bat
+```
+
+To use a different printer IP, pass it as an argument:
+```bash
+./k2pro-timelapse.sh 192.168.1.50
+```
+
+If you don't pass an IP it defaults to `192.168.10.87`.
+
+---
+
+### Start automatically at login (Linux)
+
+To have it start every time you log in without touching a terminal:
+
+```bash
+systemctl --user enable --now k2pro-timelapse
+```
+
+Check it is running:
+```bash
+systemctl --user status k2pro-timelapse
+```
+
+Stop it:
+```bash
+systemctl --user stop k2pro-timelapse
+```
 
 ---
 
 ### Manual mode
 
-Start your print, then run the script passing your printer's IP address:
+If you want to control start/stop yourself:
+
+#### Linux / macOS
+```bash
+source venv/bin/activate
+python3 k2pro_timelapse.py <YOUR-PRINTER-IP>
+```
 
 #### Windows
 ```powershell
@@ -97,37 +139,18 @@ venv\Scripts\activate
 python k2pro_timelapse.py <YOUR-PRINTER-IP>
 ```
 
-#### macOS / Linux
-```bash
-source venv/bin/activate
-python3 k2pro_timelapse.py <YOUR-PRINTER-IP>
-```
-
 Press **Ctrl+C** when the print finishes — the script will automatically run `ffmpeg` and produce the timelapse MP4.
 
 ---
 
-### Automatic mode (recommended)
+### Automatic mode (single print, no launcher)
 
-Add `--auto` and the script will connect to Moonraker, wait for the print to start, capture automatically, and stop by itself when the print ends:
-
-#### Windows
-```powershell
-venv\Scripts\activate
-python k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
-```
-
-#### macOS / Linux
 ```bash
 source venv/bin/activate
 python3 k2pro_timelapse.py <YOUR-PRINTER-IP> --auto
 ```
 
-No Ctrl+C needed — the timelapse builds itself when the print is done. Old frames are cleaned up automatically and each timelapse is saved with a timestamp so nothing gets overwritten.
-
----
-
-If you don't pass an IP it defaults to `192.168.10.87`.
+Connects to Moonraker, waits for the print to start, captures automatically, stops and builds the timelapse when the print ends, then waits for the next print. Press Ctrl+C to quit.
 
 ---
 
